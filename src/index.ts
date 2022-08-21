@@ -1,4 +1,4 @@
-import { createRxDatabase } from "rxdb";
+import { createRxDatabase, RxDatabase } from "rxdb";
 import { replicateRxCollection } from "rxdb/plugins/replication";
 import { getRxStorageDexie } from "rxdb/plugins/dexie";
 
@@ -19,7 +19,7 @@ const contactSchema = {
   }
 };
 
-export async function initDatabase() {
+async function initDatabase() {
   const database = await createRxDatabase({
     name: "testdb",
     storage: getRxStorageDexie()
@@ -34,25 +34,37 @@ export async function initDatabase() {
   return database;
 }
 
-initDatabase().then(async(db) => {
-  replicateRxCollection({
+function createReplicator(database: RxDatabase) {
+  return replicateRxCollection({
     waitForLeadership : false,
-    collection: db.contacts,
+    collection: database.contacts,
     replicationIdentifier: 'my-rest-replication-to-https://example.com/api/sync',
+    live: true,
     pull: {
-        /**
-         * Pull handler
-         */
-        async handler(lastCheckpoint, batchSize) {
-            console.log('lastCheckpoint', lastCheckpoint);
-            console.log('batchSize', batchSize)
-            return {
-                documents: [],
-                checkpoint: null
-            };
-        },
-        batchSize: 10,
+      async handler(lastCheckpoint, batchSize) {
+        console.log('lastCheckpoint', lastCheckpoint);
+        console.log('batchSize', batchSize);
+
+        const last = {id: 'abcdef', updatedAt: new Date().getTime()};
+
+        return {
+          documents: lastCheckpoint ? [] : [last],
+          checkpoint: last
+        };
+      },
     },
-});
+  });
+}
+
+initDatabase().then(async(db) => {
+  let replicator = createReplicator(db);
+
+  await replicator.awaitInSync();
+  await replicator.cancel();
+
+  replicator = createReplicator(db);
+
+  await replicator.awaitInSync();
+  await replicator.cancel();
 
 });
