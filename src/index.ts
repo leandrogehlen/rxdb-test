@@ -53,18 +53,22 @@ function createReplicator(database: RxDatabase) {
         };
       },
     },
+    push: {
+     async handler(docs) {
+      console.log(docs);
+      return [];
+     }
+    }
   });
 }
 
 initDatabase().then(async(db) => {
   let replicator = createReplicator(db);
 
+  db.collections.contacts.insert({
+    id: 'abc',
+    name: 'Leandro'
+  })
+
   await replicator.awaitInSync();
-  await replicator.cancel();
-
-  replicator = createReplicator(db);
-
-  await replicator.awaitInSync();
-  await replicator.cancel();
-
 });
